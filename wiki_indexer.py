@@ -4,15 +4,16 @@ import os
 import time
 import xml.sax
 from nltk.corpus import stopwords
-from nltk.stem import SnowballStemmer
+import Stemmer
 from collections import defaultdict
 
 pageCount = 0
 titleDict = {}
+allWords = 0
 indexDict = defaultdict(list)
 
 stopWords = set(stopwords.words('english'))
-stemmer = SnowballStemmer('english')
+stemmer = Stemmer.Stemmer('english')
 
 
 def processText(title, text):
@@ -44,6 +45,8 @@ def processText(title, text):
 
 
 def tokenize(text):
+    global allWords
+
     text = text.strip().encode("ascii", errors="ignore").decode()
     # text = re.sub(r'http[^\ ]*\ ', r' ', text)
     text = re.sub(
@@ -54,6 +57,8 @@ def tokenize(text):
     tokens = text.split()
     tokens = [token.strip() for token in tokens]
 
+    allWords += len(tokens)
+
     return tokens
 
 
@@ -62,10 +67,7 @@ def removeStopwords(words):
 
 
 def stem(words):
-    stemmedWords = []
-    for word in words:
-        word = stemmer.stem(word)
-        stemmedWords.append(word)
+    stemmedWords = stemmer.stemWords(words)
 
     return stemmedWords
 
@@ -213,7 +215,7 @@ def createIndex(title, body, infobox, categories, links, references):
     pageCount += 1
 
 
-def writeToFiles():
+def writeToFiles(indexFolder, indexStatFile):
     global indexDict, titleDict
     data = []
 
@@ -223,20 +225,11 @@ def writeToFiles():
         entry += ' '.join(postings)
         data.append(entry)
 
-    with open("20171104/invertedindex/" + "index.txt", "w+") as f:
+    with open(indexFolder + "/index.txt", "w+") as f:
         f.write("\n".join(data))
 
-    data = []
-
-    for docID in sorted(titleDict.keys()):
-        entry = str(docID) + ' ' + titleDict[docID]
-        data.append(entry)
-
-    with open("20171104/invertedindex/" + "titles.txt", "w+") as f:
-        f.write("\n".join(data))
-
-    with open("20171104/invertedindex_stat.txt", "w+") as f:
-        f.write(str(len(indexDict)))
+    with open(indexStatFile, "w+") as f:
+        f.write(str(allWords) + "\n" + str(len(indexDict)))
 
     titleDict = {}
     indexDict = defaultdict(list)
@@ -282,9 +275,11 @@ class WikiHandler(xml.sax.ContentHandler):
 
 
 def main():
+    startTime = time.clock()
+
     wikiDumpFile = sys.argv[1]
-    # indexFolder = sys.argv[2]
-    # indexStatFile = sys.argv[3]
+    indexFolder = sys.argv[2]
+    indexStatFile = sys.argv[3]
 
     parser = xml.sax.make_parser()
     parser.setFeature(xml.sax.handler.feature_namespaces, False)
@@ -294,7 +289,13 @@ def main():
     parser.setContentHandler(handler)
     parser.parse(wikiDumpFile)
 
-    writeToFiles()
+    indexFolder = os.path.dirname(indexFolder)
+    if (not os.path.exists(indexFolder)):
+        os.makedirs(indexFolder)
+    writeToFiles(indexFolder, indexStatFile)
+
+    endTime = time.clock()
+    # print("Time Elapsed:", round(endTime - startTime, 2), "seconds")
 
 
 if __name__ == '__main__':
